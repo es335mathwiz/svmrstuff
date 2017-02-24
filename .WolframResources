@@ -1,0 +1,11 @@
+Resources[
+    Version[1],
+    Java[
+        Directory["javaOutput"],
+        Directory["SVMR/Java"]
+    ],
+    ExecutionBuildCommand["<<SVMR`"],
+    Paclet[
+        FunctionPaclet[False]
+    ]
+]

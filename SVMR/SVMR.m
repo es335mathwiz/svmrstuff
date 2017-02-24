@@ -3,6 +3,18 @@
 (* Created by the Wolfram Workbench Feb 6, 2017 *)
 
 BeginPackage["SVMR`", {"JLink`"}]
+
+doLinearStaelin::usage = "doLinearStaelin  "
+
+
+doSigmoid::usage = "doSigmoid  "
+
+doRBF::usage = "doRBF  "
+
+doPoly::usage = "doPoly  "
+
+
+doLinear::usage = "doLinear  "
 (* Exported symbols added here with SymbolName::usage *) 
 
 Begin["`Private`"]
@@ -256,9 +268,114 @@ With[{keepers=Range[ii-(hh+vv),ii+(hh+vv)]},
 And[hh>=0,vv>=0,
 lenData-(hh+vv)>=ii>=(hh+vv+1)]
 
+(* from notebook  *)
+gen3D[paramRanges : {{_?NumberQ, _?NumberQ} ..}] :=
+ With[{theTrips = {#[[1]], (#[[1]] + #[[2]])/2, #[[2]]} & /@ 
+     paramRanges},
+  theTrips]
+gen2D[paramRanges : {{_?NumberQ, _?NumberQ} ..}] :=
+ With[{theTwos = {#[[1]] + (#[[2]] - #[[1]])/4, #[[
+         2]] - (#[[2]] - #[[1]])/4} & /@ paramRanges},
+  theTwos]
+outerFirstPair[xx_?MatrixQ, yy : {_?NumberQ ..}] := 
+    Flatten[Outer[Append, xx, yy, 1], 1];
+allOuters[xx : {{_?NumberQ ..} ..}] := Fold[outerFirstPair, {{}}, xx]
+staelinPoints[paramRanges : {{_?NumberQ, _?NumberQ} ..}] := 
+ With[{threeDs = allOuters[gen3D[paramRanges]], 
+   twoDs = allOuters[gen2D[paramRanges]]}, Join[threeDs, twoDs]]
+practicalSelection[yVals_?VectorQ, sigEps_?NumberQ] := 
+ With[{stdevY = StandardDeviation[yVals], meanY = Mean[yVals], 
+   nn = Length[yVals]}, 
+  With[{cVal = 
+     Max[Abs[meanY - 3*stdevY], Abs[meanY + 3*stdevY]]}, {cVal, 
+    3*sigEps*Sqrt[Log[nn]/nn]}]]
+    
+  
+doLinear[xVals_?MatrixQ, yVals_?VectorQ, paramVals_?VectorQ, 
+  nFolds_Integer] := Module[{svmtLinear, modLinear},
+  svmtLinear = JavaNew["libsvm.trainGuts"];
+  svmtLinear[mmaUreadUproblemLinear[xVals, yVals, paramVals]];
+  modLinear = 
+   libsvm`svm`svmUtrain[svmtLinear[prob], svmtLinear[param]];
+  {svmtLinear, modLinear, 
+   libsvm`svm`svmUpredict[modLinear, #] & /@ xVals, 
+   libsvm`svm`svmUcrossUvalidation[svmtLinear[prob], 
+    svmtLinear[param], nFolds]}]
+    
+   Print["needs to include initial"]; 
+    doLinearStaelin[{{ccWasBest_?NumberQ,epsWasBest_?NumberQ},wasBestVal_?NumberQ},
+  pRngs : {{ccLow_?NumberQ, ccHigh_?NumberQ}, {epsLow_?NumberQ, 
+     epsHigh_?NumberQ}},forMin_] := Module[{stPts = staelinPoints[pRngs]},
+     With[{mBy=MinimalBy[stPts,forMin]},
+     		{{mBy[[1]],forMin[mBy[[1]]]},reCenter[pRngs,mBy[[1]]],forMin}]]
+  
+  reCenter[pRngs : {{ccLow_?NumberQ, ccHigh_?NumberQ}, {epsLow_?NumberQ, 
+     epsHigh_?NumberQ}},theBest:{bestCC_?NumberQ,bestEps_?NumberQ}]:=
+     With[{newLens = (#[[2]] - #[[1]])/2 & /@ pRngs},
+     MapThread[reCenterOne,{pRngs,theBest,newLens}]]
+     
+     	reCenterOne[{lowVal_?NumberQ,highVal_?NumberQ},bestVal_?NumberQ,width_?NumberQ]:=
+     	If[bestVal-width/2<lowVal,{lowVal,lowVal+width},If[bestVal+width/2>highVal,{highVal-width,highVal},
+     		{bestVal-width/2,bestVal+width/2}]]
+     	
+     
+(*
+  doLinearStaelin[
+  pRngs : {{ccLow_?NumberQ, ccHigh_?NumberQ}, {epsLow_?NumberQ, 
+     epsHigh_?NumberQ}},forMin_] := Module[{stPts = staelinPoints[pRngs]},
+     With[{mBy=MinimalBy[stPts,forMin]},
+     		{mBy[[1]],
+  Transpose[{stPts, forMin /@ stPts}],reCenter[pRngs,mBy[[1]]]}]]
 
 
+doLinearStaelin[
+  pRngs : {{ccLow_?NumberQ, ccHigh_?NumberQ}, {epsLow_?NumberQ, 
+     epsHigh_?NumberQ}}] := 
+ Module[{stPts = staelinPoints[pRngs], 
+   newLens = (#[[2]] - #[[1]])/2 & /@ pRngs},
+  With[{minBy =
+     MinimalBy[stPts, forMinLinear]}, Print["minBy=", minBy];
+   If[Length[minBy] =!= 1, 
+    Throw["minBy not singleton:" <> ToString[minBy]],
+    With[{toLeft = pRngs[[1]] - (minBy[[1]] - newLens), 
+      toRight = (minBy[[1]] + newLens) - pRngs[[2]]}, {minBy, toLeft, 
+      toRight}]]]]*)
+      
+      doPoly[xVals_?MatrixQ, yVals_?VectorQ, paramVals_?VectorQ, 
+  nFolds_Integer] := Module[{svmtPoly, modPoly},
+  svmtPoly = JavaNew["libsvm.trainGuts"];
+  svmtPoly[mmaUreadUproblemPoly[xVals, yVals, paramVals]];
+  modPoly = libsvm`svm`svmUtrain[svmtPoly[prob], svmtPoly[param]];
+  {svmtPoly, modPoly, libsvm`svm`svmUpredict[modPoly, #] & /@ xVals, 
+   libsvm`svm`svmUcrossUvalidation[svmtPoly[prob], svmtPoly[param], 
+    nFolds]}]
 
+ 
+ doRBF[xVals_?MatrixQ, yVals_?VectorQ, paramVals_?VectorQ, 
+  nFolds_Integer] := Module[{svmtRBF, modRBF},
+  svmtRBF = JavaNew["libsvm.trainGuts"];
+  svmtRBF[mmaUreadUproblemRBF[xVals, yVals, paramVals]];
+  modRBF = libsvm`svm`svmUtrain[svmtRBF[prob], svmtRBF[param]];
+  {svmtRBF, modRBF, libsvm`svm`svmUpredict[modRBF, #] & /@ xVals, 
+   libsvm`svm`svmUcrossUvalidation[svmtRBF[prob], svmtRBF[param], 
+    nFolds]}]
+
+ 
+ doSigmoid[xVals_?MatrixQ, yVals_?VectorQ, paramVals_?VectorQ, 
+  nFolds_Integer] := Module[{svmtSigmoid, modSigmoid},
+  svmtSigmoid = JavaNew["libsvm.trainGuts"];
+  svmtSigmoid[mmaUreadUproblemSigmoid[xVals, yVals, paramVals]];
+  modSigmoid = 
+   libsvm`svm`svmUtrain[svmtSigmoid[prob], svmtSigmoid[param]];
+  {svmtSigmoid, modSigmoid, 
+   libsvm`svm`svmUpredict[modSigmoid, #] & /@ xVals, 
+   libsvm`svm`svmUcrossUvalidation[svmtSigmoid[prob], 
+    svmtSigmoid[param], nFolds]}]
+
+Sigmoid[cc_?NumberQ, eps_?NumberQ, gamma_?NumberQ, 
+  coeff_?NumberQ, degree_?NumberQ] := 
+ Norm[doSigmoid[allCX, Flatten[allCY], {cc, eps}, 2][[3]]]
+ 
 End[]
 
 EndPackage[]
