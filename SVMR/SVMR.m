@@ -15,6 +15,12 @@ doPoly::usage = "doPoly  "
 
 
 doLinear::usage = "doLinear  "
+
+kNNRegressionVar::usage = "kNNRegression  "
+
+practicalEps::usage = "practicalEps  "
+
+practicalSelection::usage = "practicalSelection  "
 (* Exported symbols added here with SymbolName::usage *) 
 
 Begin["`Private`"]
@@ -317,7 +323,13 @@ doLinear[xVals_?MatrixQ, yVals_?VectorQ, paramVals_?VectorQ,
      	reCenterOne[{lowVal_?NumberQ,highVal_?NumberQ},bestVal_?NumberQ,width_?NumberQ]:=
      	If[bestVal-width/2<lowVal,{lowVal,lowVal+width},If[bestVal+width/2>highVal,{highVal-width,highVal},
      		{bestVal-width/2,bestVal+width/2}]]
-     	
+   		
+    practicalEps[xVals_?MatrixQ, yVals_?VectorQ,kk_Integer]:=
+    With[{nn=Length[yVals]},3*Sqrt[kNNRegressionVar[xVals,yVals,kk]*Log[nn]/nn]]
+     		
+    kNNRegressionVar[xVals_?MatrixQ, yVals_?VectorQ,kk_Integer]:=
+    With[{nn=Length[yVals]},
+    With[{nRes=Nearest[xVals->yVals,#,kk]&/@xVals},(1/(nn-nn/kk))*Norm[yVals-(Mean/@nRes)]]]
      
 (*
   doLinearStaelin[
